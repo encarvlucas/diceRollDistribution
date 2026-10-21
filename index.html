@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dice Roll Distribution</title>
+<style>
+:root{--bg:#f6f5fb;--card:#fff;--text:#1d1b2e;--muted:#6b6880;--line:#e6e4f0;--accent:#6c5ce7;--accent2:#e8590c;--chip:#efedfa;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#13121c;--card:#1d1b2b;--text:#eeedf7;--muted:#9f9cb8;--line:#2e2b42;--accent:#9d8cff;--accent2:#ff9a5c;--chip:#2a2740;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#13121c;--card:#1d1b2b;--text:#eeedf7;--muted:#9f9cb8;--line:#2e2b42;--accent:#9d8cff;--accent2:#ff9a5c;--chip:#2a2740;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:980px;margin:0 auto;padding:28px 18px 40px}
+h1{margin:0;font-size:1.7rem;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:4px 0 22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 4px 18px rgba(80,60,160,.07)}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:18px 28px}
+@media(max-width:640px){.controls{grid-template-columns:1fr}}
+.ctl label{display:flex;justify-content:space-between;align-items:center;font-weight:600;margin-bottom:8px}
+.row{display:flex;gap:12px;align-items:center}
+input[type=range]{flex:1;accent-color:var(--accent);height:6px;min-width:0}
+input[type=number]{width:72px;padding:7px 8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+button{font:inherit;cursor:pointer;color:var(--text)}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:3px 11px;font-size:.85rem}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px;margin:16px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.stat small{display:block;color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+.stat b{font-size:1.25rem;font-variant-numeric:tabular-nums}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 14px}
+.seg button.on{background:var(--accent);color:#fff}
+.tog{display:flex;gap:7px;align-items:center;color:var(--muted);font-size:.9rem;cursor:pointer}
+.tog input{accent-color:var(--accent2)}
+.roll{border:0;background:var(--accent);color:#fff;border-radius:10px;padding:7px 16px;font-weight:600}
+.roll:active{transform:scale(.97)}
+#chartBox{position:relative}
+svg{width:100%;height:auto;display:block;touch-action:pan-y}
+svg text{fill:var(--muted);font-size:12px;font-family:inherit}
+#tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:.82rem;box-shadow:0 6px 20px rgba(0,0,0,.18);display:none;white-space:nowrap;font-variant-numeric:tabular-nums;z-index:2}
+#tip b{font-size:.95rem}
+.legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:.82rem;margin-top:6px}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+#dice{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;align-items:center}
+.die{min-width:30px;height:30px;padding:0 6px;border-radius:8px;background:var(--chip);border:1px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:.9rem}
+.total{font-weight:700;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎲 Dice Roll Distribution</h1>
+  <p class="sub">Exact probability of every possible total, for any number of dice and faces.</p>
+
+  <div class="card controls">
+    <div class="ctl">
+      <label for="nNum">Number of dice</label>
+      <div class="row"><input type="range" id="nRange" min="1" max="100" value="2"><input type="number" id="nNum" min="1" max="100" value="2"></div>
+    </div>
+    <div class="ctl">
+      <label for="fNum">Faces per die</label>
+      <div class="row"><input type="range" id="fRange" min="2" max="100" value="6"><input type="number" id="fNum" min="2" max="100" value="6"></div>
+      <div class="chips" id="presets"></div>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card">
+    <div class="bar">
+      <div class="seg" id="seg"><button data-v="pmf" class="on">Probability</button><button data-v="cdf">Cumulative</button></div>
+      <label class="tog"><input type="checkbox" id="normal"> Normal approximation</label>
+      <button class="roll" id="rollBtn">Roll the dice</button>
+    </div>
+    <div id="chartBox"><div id="chart"></div><div id="tip"></div></div>
+    <div class="legend" id="legend"></div>
+    <div id="dice"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+var st={n:2,f:6,view:'pmf',normal:false,roll:null};
+var $=function(id){return document.getElementById(id)};
+var probs,cdf,lo,hi,mu,sd;
+
+function clamp(v,a,b){v=Math.round(Number(v));if(!isFinite(v))v=a;return Math.min(b,Math.max(a,v))}
+
+function compute(){
+  var n=st.n,f=st.f,dp=[1];
+  for(var k=1;k<=n;k++){
+    var nx=new Array(k*f+1).fill(0);
+    for(var s=0;s<dp.length;s++){var p=dp[s];if(!p)continue;var q=p/f;for(var v=1;v<=f;v++)nx[s+v]+=q}
+    dp=nx;
+  }
+  probs=dp;lo=n;hi=n*f;
+  var total=0;cdf=new Array(dp.length).fill(0);
+  for(var i=0;i<dp.length;i++){total+=dp[i];cdf[i]=total}
+  mu=n*(f+1)/2;sd=Math.sqrt(n*(f*f-1)/12);
+}
+
+function fmtP(p){
+  if(p<=0)return '0%';var v=p*100;
+  if(v>=0.01)return (v>=10?v.toFixed(1):v.toFixed(2))+'%';
+  return v.toExponential(1).replace('e-','×10⁻')+'%';
+}
+function bigStr(){
+  var s=(BigInt(st.f)**BigInt(st.n)).toString();
+  if(s.length<=9)return Number(s).toLocaleString('en');
+  return s[0]+'.'+s.slice(1,3)+'e'+(s.length-1);
+}
+function niceStep(x){var e=Math.pow(10,Math.floor(Math.log10(x))),m=x/e;return (m<=1?1:m<=2?2:m<=5?5:10)*e}
+function erf(x){var t=1/(1+0.3275911*Math.abs(x)),y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return x>=0?y:-y}
+
+function stats(){
+  var mx=Math.max.apply(null,probs),modes=[];
+  for(var s=lo;s<=hi;s++)if(probs[s]>=mx*(1-1e-9))modes.push(s);
+  var mode=modes.length>1?modes[0]+'–'+modes[modes.length-1]:String(modes[0]);
+  var items=[['Possible totals',lo+' – '+hi],['Mean',+mu.toFixed(2)],['Std. deviation',+sd.toFixed(3)],['Most likely',mode],['Peak probability',fmtP(mx)],['Outcomes (f^n)',bigStr()]];
+  $('stats').innerHTML=items.map(function(i){return '<div class="stat"><small>'+i[0]+'</small><b>'+i[1]+'</b></div>'}).join('');
+}
+
+function draw(){
+  var W=800,H=420,ml=58,mr=18,mt=18,mb=46,pw=W-ml-mr,ph=H-mt-mb,cnt=hi-lo+1,cum=st.view==='cdf';
+  var mx=Math.max.apply(null,probs);
+  var npk=1/(sd*Math.sqrt(2*Math.PI));
+  var ymaxPct=cum?100:Math.max(mx,st.normal?npk:0)*100*1.06;
+  var ystep=cum?20:niceStep(ymaxPct/5),yTop=cum?100:Math.ceil(ymaxPct/ystep)*ystep;
+  var xs=function(s){return ml+((s-lo+0.5)/cnt)*pw};
+  var ys=function(p){return mt+ph-(p*100/yTop)*ph};
+  var base=mt+ph,o='';
+  o+='<svg id="svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Distribution chart"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".38"/><stop offset="1" stop-color="var(--accent)" stop-opacity=".02"/></linearGradient><clipPath id="clip"><rect x="'+ml+'" y="'+mt+'" width="'+pw+'" height="'+ph+'"/></clipPath></defs>';
+  for(var v=0;v<=yTop+1e-9;v+=ystep){
+    var y=mt+ph-(v/yTop)*ph;
+    o+='<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+y+'" y2="'+y+'" stroke="var(--line)"/><text x="'+(ml-8)+'" y="'+(y+4)+'" text-anchor="end">'+(+v.toFixed(2))+'%</text>';
+  }
+  var xstep=Math.max(1,niceStep(cnt/10));
+  var xt=lo,xe=hi;
+  for(var s=lo;s<=xe;s+=xstep){o+='<text x="'+xs(s)+'" y="'+(base+20)+'" text-anchor="middle">'+s+'</text>'}
+  o+='<text x="'+(ml+pw/2)+'" y="'+(H-6)+'" text-anchor="middle">Total of all dice</text>';
+  var arr=function(s){return cum?cdf[s]:probs[s]};
+  if(cnt<=100){
+    var bw=Math.max(1,pw/cnt*0.78);
+    for(var s2=lo;s2<=hi;s2++){var yy=ys(arr(s2));o+='<rect x="'+(xs(s2)-bw/2)+'" y="'+yy+'" width="'+bw+'" height="'+Math.max(0,base-yy)+'" rx="'+Math.min(3,bw/3)+'" fill="var(--accent)" opacity=".28"/>'}
+  }
+  var pts=[];for(var s3=lo;s3<=hi;s3++)pts.push([xs(s3),ys(arr(s3))]);
+  var d='M'+pts[0][0]+' '+pts[0][1];
+  for(var i=0;i<pts.length-1;i++){var mxp=(pts[i][0]+pts[i+1][0])/2,myp=(pts[i][1]+pts[i+1][1])/2;d+=' Q'+pts[i][0]+' '+pts[i][1]+' '+mxp+' '+myp}
+  d+=' L'+pts[pts.length-1][0]+' '+pts[pts.length-1][1];
+  o+='<path d="'+d+' L'+pts[pts.length-1][0]+' '+base+' L'+pts[0][0]+' '+base+' Z" fill="url(#g)"/>';
+  o+='<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>';
+  if(st.normal){
+    var nd='';
+    for(var k=0;k<=200;k++){
+      var xv=lo-0.5+(cnt*k/200),z=(xv-mu)/sd;
+      var val=cum?0.5*(1+erf(z/Math.SQRT2)):npk*Math.exp(-z*z/2);
+      nd+=(k?'L':'M')+xs(xv+0.5*0+0)+' '+ys(val);
+    }
+    o+='<path clip-path="url(#clip)" d="'+nd+'" fill="none" stroke="var(--accent2)" stroke-width="2" stroke-dasharray="6 5"/>';
+  }
+  if(st.roll!==null){
+    var rx=xs(st.roll);
+    o+='<line x1="'+rx+'" x2="'+rx+'" y1="'+mt+'" y2="'+base+'" stroke="var(--accent2)" stroke-width="2"/><circle cx="'+rx+'" cy="'+ys(arr(st.roll))+'" r="5.5" fill="var(--accent2)"/>';
+  }
+  o+='<g id="hov" style="display:none"><line id="hl" y1="'+mt+'" y2="'+base+'" stroke="var(--muted)" stroke-dasharray="3 4"/><circle id="hc" r="5" fill="var(--card)" stroke="var(--accent)" stroke-width="2.5"/></g>';
+  o+='<rect id="hit" x="'+ml+'" y="'+mt+'" width="'+pw+'" height="'+ph+'" fill="transparent"/></svg>';
+  $('chart').innerHTML=o;
+
+  var svg=$('svg'),tip=$('tip'),box=$('chartBox');
+  function move(e){
+    var r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)*W/r.width;
+    var s=Math.round(lo+((sx-ml)/pw)*cnt-0.5);s=Math.min(hi,Math.max(lo,s));
+    var cx=xs(s),cy=ys(arr(s));
+    $('hov').style.display='';$('hl').setAttribute('x1',cx);$('hl').setAttribute('x2',cx);$('hc').setAttribute('cx',cx);$('hc').setAttribute('cy',cy);
+    var p=probs[s],le=cdf[s],ge=1-cdf[s]+p;
+    tip.innerHTML='<b>Total '+s+'</b><br>P(= '+s+'): '+fmtP(p)+'<br>P(≤ '+s+'): '+fmtP(le)+'<br>P(≥ '+s+'): '+fmtP(Math.min(1,ge))+'<br>≈ 1 in '+(p>0?(1/p<1e6?(1/p).toLocaleString('en',{maximumFractionDigits:1}):(1/p).toExponential(1)):'∞');
+    tip.style.display='block';
+    var px=cx/W*r.width,tw=tip.offsetWidth;
+    tip.style.left=(px>r.width*0.6?px-tw-14:px+14)+'px';
+    tip.style.top=Math.max(0,cy/H*r.height-30)+'px';
+  }
+  svg.addEventListener('pointermove',move);
+  svg.addEventListener('pointerdown',move);
+  svg.addEventListener('pointerleave',function(){tip.style.display='none';var h=$('hov');if(h)h.style.display='none'});
+  $('legend').innerHTML='<span><i style="background:var(--accent)"></i>Exact distribution</span>'+(st.normal?'<span><i style="background:var(--accent2)"></i>Normal approximation</span>':'')+(st.roll!==null?'<span><i style="background:var(--accent2)"></i>Your roll</span>':'');
+}
+
+function diceUI(){
+  var el=$('dice');
+  if(!st.rolled){el.innerHTML='';return}
+  var shown=st.rolled.slice(0,40).map(function(v){return '<span class="die">'+v+'</span>'}).join('');
+  if(st.rolled.length>40)shown+='<span class="die">…</span>';
+  el.innerHTML=shown+'<span class="total">= '+st.roll+'</span>';
+}
+
+function render(clearRoll){
+  if(clearRoll){st.roll=null;st.rolled=null}
+  compute();stats();draw();diceUI();
+}
+
+function setN(v){st.n=clamp(v,1,100);$('nRange').value=$('nNum').value=st.n;render(true)}
+function setF(v){st.f=clamp(v,2,100);$('fRange').value=$('fNum').value=st.f;presets();render(true)}
+function presets(){
+  $('presets').innerHTML=[4,6,8,10,12,20,100].map(function(f){return '<button class="chip'+(f===st.f?' on':'')+'" data-f="'+f+'">d'+f+'</button>'}).join('');
+}
+
+$('nRange').addEventListener('input',function(e){setN(e.target.value)});
+$('fRange').addEventListener('input',function(e){setF(e.target.value)});
+$('nNum').addEventListener('change',function(e){setN(e.target.value)});
+$('fNum').addEventListener('change',function(e){setF(e.target.value)});
+$('presets').addEventListener('click',function(e){var b=e.target.closest('button');if(b)setF(b.dataset.f)});
+$('seg').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;st.view=b.dataset.v;
+  Array.prototype.forEach.call($('seg').children,function(c){c.classList.toggle('on',c===b)});draw();
+});
+$('normal').addEventListener('change',function(e){st.normal=e.target.checked;draw()});
+$('rollBtn').addEventListener('click',function(){
+  var r=[],t=0;for(var i=0;i<st.n;i++){var v=1+Math.floor(Math.random()*st.f);r.push(v);t+=v}
+  st.rolled=r;st.roll=t;draw();diceUI();
+});
+presets();render(false);
+})();
+</script>
+</body>
+</html>
